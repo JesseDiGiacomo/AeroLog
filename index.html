@@ -12,6 +12,10 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""></script>
+    
+    <!-- Adicionado Babel Standalone para transpilação no navegador -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <style>
       .leaflet-container {
         height: 100%;
@@ -34,6 +38,7 @@
 </head>
   <body class="bg-gray-900 text-white">
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <!-- Modificado o tipo de script para que o Babel possa transpilar o TSX -->
+    <script type="text/babel" data-type="module" src="/index.tsx"></script>
   </body>
 </html>
