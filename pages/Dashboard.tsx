@@ -86,8 +86,8 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-4xl font-bold text-white mb-2">Bem-vindo ao AeroLog</h1>
-        <p className="text-lg text-gray-400">Descubra e compartilhe os voos mais recentes de pilotos de todo o mundo.</p>
+        <h1 className="text-4xl font-bold text-white mb-2">Bem-vindo ao XCBrasil</h1>
+        <p className="text-lg text-gray-400">Descubra e compartilhe os voos mais recentes de pilotos brasileiros.</p>
       </div>
       
       <div className="flex justify-center mb-6 bg-gray-900/50 p-1 rounded-lg border border-gray-700 max-w-xs mx-auto">

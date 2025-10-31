@@ -7,9 +7,9 @@ const Footer: React.FC = () => {
       <div className="container mx-auto px-4 py-6 text-center text-gray-500">
         <div className="flex justify-center items-center space-x-2 mb-2">
             <Wind className="text-cyan-500" />
-            <p className="font-bold text-lg text-gray-400">AeroLog</p>
+            <p className="font-bold text-lg text-gray-400">XCBrasil</p>
         </div>
-        <p>&copy; {new Date().getFullYear()} AeroLog. Todos os direitos reservados. O céu está esperando.</p>
+        <p>&copy; {new Date().getFullYear()} XCBrasil. Todos os direitos reservados. O céu está esperando.</p>
       </div>
     </footer>
   );

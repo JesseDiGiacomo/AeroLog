@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import type { Flight, Comment } from '../types';
-import { getFlightById, toggleFlightLike, toggleFollowTakeoff } from '../services/flightService';
+import { getFlightById, toggleFlightLike, toggleFollowTakeoff, addComment, deleteComment } from '../services/flightService';
 import { generateFlightSummary } from '../services/geminiService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import MapDisplay from '../components/MapDisplay';
@@ -12,7 +12,7 @@ import { formatDuration } from '../utils';
 import { 
   Sparkles, MessageSquare, Award, MapPin, ArrowRight, List, Clock, Hourglass, ChevronsUp,
   ChevronsDown, Wind, Gauge, Mountain, MountainSnow, TrendingUp, Medal, Triangle,
-  GitBranch, MoveRight, Loader, Flag, Share2, Check, Bookmark
+  GitBranch, MoveRight, Loader, Flag, Share2, Check, Bookmark, Trash2
 } from 'lucide-react';
 
 const StatItem = ({ icon, label, value, iconClassName = "text-cyan-400" }: { icon: React.ReactNode, label: string, value: string | number, iconClassName?: string }) => (
@@ -36,7 +36,6 @@ const FlightDetail: React.FC = () => {
   
   const { currentUser, updateCurrentUser } = useAuth();
   const navigate = useNavigate();
-  const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
 
   useEffect(() => {
@@ -46,9 +45,6 @@ const FlightDetail: React.FC = () => {
       try {
         const data = await getFlightById(id);
         setFlight(data);
-        if (data) {
-          setComments(data.comments);
-        }
       } catch (error) {
         console.error("Failed to fetch flight details", error);
         setFlight(null);
@@ -76,20 +72,43 @@ const FlightDetail: React.FC = () => {
     autoGenerateSummary();
   }, [flight]);
   
-  const handleCommentSubmit = (e: React.FormEvent) => {
+  const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newComment.trim() && currentUser) {
+    if (newComment.trim() && currentUser && flight) {
       const comment: Comment = {
         id: `c${Date.now()}`,
         author: currentUser,
         text: newComment.trim(),
         timestamp: new Date().toISOString(),
       };
-      setComments(prevComments => [comment, ...prevComments]);
-      setNewComment('');
+      
+      try {
+        const updatedFlight = await addComment(flight.id, comment);
+        if (updatedFlight) {
+          setFlight(updatedFlight);
+          setNewComment('');
+        }
+      } catch (error) {
+          console.error("Failed to add comment", error);
+      }
     }
   };
   
+  const handleDeleteComment = async (commentId: string) => {
+    if (!flight) return;
+    if (window.confirm('Tem certeza de que deseja apagar este comentário? Esta ação não pode ser desfeita.')) {
+      try {
+        const updatedFlight = await deleteComment(flight.id, commentId);
+        if (updatedFlight) {
+          setFlight(updatedFlight);
+        }
+      } catch (error) {
+        console.error('Falha ao apagar o comentário', error);
+        alert('Não foi possível apagar o comentário. Tente novamente.');
+      }
+    }
+  };
+
   const handleLikeToggle = async (flightId: string) => {
     if (!currentUser) {
       navigate('/login');
@@ -121,13 +140,11 @@ const FlightDetail: React.FC = () => {
   const handleShare = async () => {
     if (!flight) return;
 
-    // Construct an absolute URL to ensure navigator.share works correctly.
-    // In some environments, window.location.href might be relative or incomplete.
     const shareableUrl = new URL(window.location.href, document.baseURI).href;
 
     const shareData = {
-      title: `Voo de ${flight.pilot.name} - AeroLog`,
-      text: `Confira este incrível voo de ${flight.distance.toFixed(1)} km por ${flight.pilot.name} em ${flight.takeoff} no AeroLog!`,
+      title: `Voo de ${flight.pilot.name} - XCBrasil`,
+      text: `Confira este incrível voo de ${flight.distance.toFixed(1)} km por ${flight.pilot.name} em ${flight.takeoff} no XCBrasil!`,
       url: shareableUrl,
     };
 
@@ -147,6 +164,30 @@ const FlightDetail: React.FC = () => {
         alert('Não foi possível copiar o link para a área de transferência.');
       }
     }
+  };
+  
+  const handleReportFlight = () => {
+    if (!flight) return;
+
+    const subject = "Denuncia de Voo Fraudulento";
+    const flightUrl = new URL(window.location.href, document.baseURI).href;
+    
+    let body = `Por favor, investigue o seguinte voo por atividade suspeita:\n\n`;
+    body += `Link do Voo: ${flightUrl}\n`;
+    body += `ID do Voo: ${flight.id}\n`;
+    body += `Piloto do Voo: ${flight.pilot.name} (ID: ${flight.pilot.id})\n\n`;
+
+    if (currentUser) {
+        body += `Denunciado por: ${currentUser.name} (ID: ${currentUser.id})\n`;
+    } else {
+        body += `Denunciado por: Um usuário anônimo\n`;
+    }
+
+    body += `\nPor favor, descreva o motivo da sua denúncia aqui:\n\n`;
+
+    const mailtoLink = `mailto:silva.jesse@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    window.location.href = mailtoLink;
   };
 
   if (isLoading) {
@@ -174,6 +215,7 @@ const FlightDetail: React.FC = () => {
                         </h1>
                         <div className="sm:hidden flex items-center space-x-2">
                            <button 
+                              type="button"
                               onClick={handleShare}
                               className={`p-2 rounded-full transition-colors duration-200 ${isCopied ? 'bg-green-500/20 text-green-400' : 'text-gray-400 hover:bg-gray-700'}`}
                               title={isCopied ? "Link copiado!" : "Compartilhar voo"}
@@ -190,6 +232,7 @@ const FlightDetail: React.FC = () => {
             <div className="hidden sm:block flex-shrink-0">
                 <div className="flex items-center space-x-2">
                     <button 
+                      type="button"
                       onClick={handleShare}
                       className={`flex items-center space-x-1.5 rounded-full px-3 py-1 transition-all duration-200 group ${isCopied ? 'bg-green-500/20 text-green-400' : 'text-gray-400 hover:bg-cyan-500/20 hover:text-cyan-400'}`}
                       title={isCopied ? "Link copiado!" : "Compartilhar voo"}
@@ -279,7 +322,7 @@ const FlightDetail: React.FC = () => {
       <div className="bg-gray-800 rounded-lg shadow-lg p-6">
         <h2 className="text-xl font-bold text-white mb-4 flex items-center space-x-2">
           <MessageSquare className="text-cyan-400" />
-          <span>Comentários ({comments.length})</span>
+          <span>Comentários ({flight.comments.length})</span>
         </h2>
         {currentUser && (
           <form onSubmit={handleCommentSubmit} className="mb-6 flex items-start space-x-3">
@@ -299,25 +342,45 @@ const FlightDetail: React.FC = () => {
           </form>
         )}
         <div className="space-y-4">
-          {comments.map(comment => (
-            <div key={comment.id} className="flex items-start space-x-3">
-              <img src={comment.author.avatarUrl} alt={comment.author.name} className="w-10 h-10 rounded-full"/>
-              <div className="bg-gray-700/50 rounded-lg p-3 flex-grow">
-                <div className="flex items-center space-x-2">
-                  <Link to={`/profile/${comment.author.id}`} className="font-semibold text-white hover:underline">{comment.author.name}</Link>
-                  <span className="text-xs text-gray-500">
-                    {new Date(comment.timestamp).toLocaleString('pt-BR')}
-                  </span>
+          {flight.comments.map(comment => {
+            const canDelete = currentUser && (currentUser.id === comment.author.id || currentUser.id === flight.pilot.id);
+            return (
+              <div key={comment.id} className="flex items-start space-x-3 group">
+                <img src={comment.author.avatarUrl} alt={comment.author.name} className="w-10 h-10 rounded-full"/>
+                <div className="bg-gray-700/50 rounded-lg p-3 flex-grow">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Link to={`/profile/${comment.author.id}`} className="font-semibold text-white hover:underline">{comment.author.name}</Link>
+                      <span className="text-xs text-gray-500">
+                        {new Date(comment.timestamp).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    {canDelete && (
+                      <button 
+                        type="button"
+                        onClick={() => handleDeleteComment(comment.id)}
+                        className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Apagar comentário"
+                        aria-label="Apagar comentário"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-gray-300 mt-1">{comment.text}</p>
                 </div>
-                <p className="text-gray-300 mt-1">{comment.text}</p>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
       
       <div className="text-center mt-4">
-        <button className="text-gray-500 hover:text-red-400 transition-colors flex items-center justify-center mx-auto space-x-2 text-sm">
+        <button
+          type="button"
+          onClick={handleReportFlight}
+          className="text-gray-500 hover:text-red-400 transition-colors flex items-center justify-center mx-auto space-x-2 text-sm"
+        >
           <Flag size={14} />
           <span>Denunciar este voo</span>
         </button>

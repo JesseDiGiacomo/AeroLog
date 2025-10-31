@@ -66,7 +66,7 @@ const Login: React.FC = () => {
                 <div className="text-center">
                     <Link to="/" className="flex items-center justify-center space-x-2 text-3xl font-bold text-white hover:text-cyan-400 transition-colors">
                         <Wind className="text-cyan-400" size={32} />
-                        <span>AeroLog</span>
+                        <span>XCBrasil</span>
                     </Link>
                     <p className="mt-2 text-gray-400">Entre para continuar</p>
                 </div>

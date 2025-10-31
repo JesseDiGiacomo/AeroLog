@@ -18,7 +18,7 @@ const Header: React.FC = () => {
       <nav className="container mx-auto px-4 py-3 flex justify-between items-center">
         <Link to="/" className="flex items-center space-x-2 text-2xl font-bold text-white hover:text-cyan-400 transition-colors">
           <Wind className="text-cyan-400" size={28} />
-          <span>AeroLog</span>
+          <span>XCBrasil</span>
         </Link>
         <div className="flex items-center space-x-4 md:space-x-6">
           <Link to="/ranking" className="flex items-center space-x-2 text-gray-300 hover:text-cyan-400 transition-colors">

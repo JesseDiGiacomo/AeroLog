@@ -1,11 +1,11 @@
 
-import type { Flight, Pilot, TrackPoint } from '../types';
+import type { Flight, Pilot, TrackPoint, Comment } from '../types';
 
 // Mock Data
 const pilots: Pilot[] = [
-  { id: '1', name: 'Alex Maverick', avatarUrl: 'https://picsum.photos/seed/alex/200', flights: 7, totalDistance: 856.9, cpf: '111.222.333-44', email: 'alex@aerolog.com', followers: ['2'], followingPilots: ['3'], followingTakeoffs: ['Annecy, France'] },
-  { id: '2', name: 'Bella Skyrunner', avatarUrl: 'https://picsum.photos/seed/bella/200', flights: 2, totalDistance: 155.8, cpf: '222.333.444-55', email: 'bella@aerolog.com', followers: [], followingPilots: ['1'], followingTakeoffs: [] },
-  { id: '3', name: 'Carlos Cloud', avatarUrl: 'https://picsum.photos/seed/carlos/200', flights: 2, totalDistance: 170.5, cpf: '333.444.555-66', email: 'carlos@aerolog.com', followers: ['1'], followingPilots: [], followingTakeoffs: ['Quixadá, Brazil'] },
+  { id: '1', name: 'Alex Maverick', avatarUrl: 'https://picsum.photos/seed/alex/200', flights: 7, totalDistance: 856.9, cpf: '111.222.333-44', email: 'alex@xcbrasil.com', followers: ['2'], followingPilots: ['3'], followingTakeoffs: ['Annecy, France'] },
+  { id: '2', name: 'Bella Skyrunner', avatarUrl: 'https://picsum.photos/seed/bella/200', flights: 2, totalDistance: 155.8, cpf: '222.333.444-55', email: 'bella@xcbrasil.com', followers: [], followingPilots: ['1'], followingTakeoffs: [] },
+  { id: '3', name: 'Carlos Cloud', avatarUrl: 'https://picsum.photos/seed/carlos/200', flights: 2, totalDistance: 170.5, cpf: '333.444.555-66', email: 'carlos@xcbrasil.com', followers: ['1'], followingPilots: [], followingTakeoffs: ['Quixadá, Brazil'] },
 ];
 
 const flights: Flight[] = [
@@ -393,6 +393,30 @@ export const toggleFlightLike = async (flightId: string, pilotId: string): Promi
       flight.likes++;
     }
     return simulateDelay({ ...flight }); // Return a copy
+  }
+  return simulateDelay(undefined);
+};
+
+export const addComment = async (flightId: string, comment: Comment): Promise<Flight | undefined> => {
+    const flight = flights.find(f => f.id === flightId);
+    if (flight) {
+        // Add to the beginning of the array to show newest first
+        flight.comments.unshift(comment);
+        return simulateDelay({ ...flight });
+    }
+    return simulateDelay(undefined);
+};
+
+export const deleteComment = async (flightId: string, commentId: string): Promise<Flight | undefined> => {
+  const flight = flights.find(f => f.id === flightId);
+  if (flight) {
+    const initialCommentCount = flight.comments.length;
+    flight.comments = flight.comments.filter(c => c.id !== commentId);
+    
+    // Check if a comment was actually deleted to avoid unnecessary updates
+    if (flight.comments.length < initialCommentCount) {
+      return simulateDelay({ ...flight });
+    }
   }
   return simulateDelay(undefined);
 };
