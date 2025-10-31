@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import type { Flight, Comment } from '../types';
-import { getFlightById, toggleFlightLike } from '../services/flightService';
+import { getFlightById, toggleFlightLike, toggleFollowTakeoff } from '../services/flightService';
 import { generateFlightSummary } from '../services/geminiService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import MapDisplay from '../components/MapDisplay';
@@ -11,7 +12,7 @@ import { formatDuration } from '../utils';
 import { 
   Sparkles, MessageSquare, Award, MapPin, ArrowRight, List, Clock, Hourglass, ChevronsUp,
   ChevronsDown, Wind, Gauge, Mountain, MountainSnow, TrendingUp, Medal, Triangle,
-  GitBranch, MoveRight, Loader, Flag
+  GitBranch, MoveRight, Loader, Flag, Share2, Check, Bookmark
 } from 'lucide-react';
 
 const StatItem = ({ icon, label, value, iconClassName = "text-cyan-400" }: { icon: React.ReactNode, label: string, value: string | number, iconClassName?: string }) => (
@@ -31,8 +32,9 @@ const FlightDetail: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [aiSummary, setAiSummary] = useState<string>('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   
-  const { currentUser } = useAuth();
+  const { currentUser, updateCurrentUser } = useAuth();
   const navigate = useNavigate();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -103,6 +105,49 @@ const FlightDetail: React.FC = () => {
       console.error("Failed to toggle like", error);
     }
   };
+  
+  const handleFollowTakeoff = async (takeoffName: string) => {
+    if (!currentUser) return;
+    try {
+      const updatedPilot = await toggleFollowTakeoff(currentUser.id, takeoffName);
+      if (updatedPilot) {
+        updateCurrentUser({ followingTakeoffs: updatedPilot.followingTakeoffs });
+      }
+    } catch (error) {
+      console.error("Failed to follow takeoff", error);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!flight) return;
+
+    // Construct an absolute URL to ensure navigator.share works correctly.
+    // In some environments, window.location.href might be relative or incomplete.
+    const shareableUrl = new URL(window.location.href, document.baseURI).href;
+
+    const shareData = {
+      title: `Voo de ${flight.pilot.name} - AeroLog`,
+      text: `Confira este incrível voo de ${flight.distance.toFixed(1)} km por ${flight.pilot.name} em ${flight.takeoff} no AeroLog!`,
+      url: shareableUrl,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (error) {
+        console.error('Erro ao usar a API de Compartilhamento:', error);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareableUrl);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2500);
+      } catch (error) {
+        console.error('Falha ao copiar o link:', error);
+        alert('Não foi possível copiar o link para a área de transferência.');
+      }
+    }
+  };
 
   if (isLoading) {
     return <LoadingSpinner text="Carregando detalhes do voo..." />;
@@ -111,6 +156,8 @@ const FlightDetail: React.FC = () => {
   if (!flight) {
     return <div className="text-center text-red-500">Voo não encontrado.</div>;
   }
+
+  const isTakeoffFollowed = currentUser?.followingTakeoffs.includes(flight.takeoff) ?? false;
 
   return (
     <div className="space-y-8">
@@ -125,7 +172,14 @@ const FlightDetail: React.FC = () => {
                         <h1 className="text-xl sm:text-2xl font-bold text-white">
                             <Link to={`/profile/${flight.pilot.id}`} className="hover:text-cyan-400 transition-colors">{flight.pilot.name}</Link>
                         </h1>
-                        <div className="sm:hidden">
+                        <div className="sm:hidden flex items-center space-x-2">
+                           <button 
+                              onClick={handleShare}
+                              className={`p-2 rounded-full transition-colors duration-200 ${isCopied ? 'bg-green-500/20 text-green-400' : 'text-gray-400 hover:bg-gray-700'}`}
+                              title={isCopied ? "Link copiado!" : "Compartilhar voo"}
+                            >
+                              {isCopied ? <Check size={20} /> : <Share2 size={20} />}
+                            </button>
                             <LikeButton flight={flight} onLikeToggle={() => handleLikeToggle(flight.id)} />
                         </div>
                     </div>
@@ -134,12 +188,30 @@ const FlightDetail: React.FC = () => {
                 </div>
             </div>
             <div className="hidden sm:block flex-shrink-0">
-                <LikeButton flight={flight} onLikeToggle={() => handleLikeToggle(flight.id)} />
+                <div className="flex items-center space-x-2">
+                    <button 
+                      onClick={handleShare}
+                      className={`flex items-center space-x-1.5 rounded-full px-3 py-1 transition-all duration-200 group ${isCopied ? 'bg-green-500/20 text-green-400' : 'text-gray-400 hover:bg-cyan-500/20 hover:text-cyan-400'}`}
+                      title={isCopied ? "Link copiado!" : "Compartilhar voo"}
+                    >
+                      {isCopied ? <Check size={18} /> : <Share2 size={18} />}
+                      <span className="font-semibold text-sm pt-0.5">{isCopied ? "Copiado!" : "Compartilhar"}</span>
+                    </button>
+                    <LikeButton flight={flight} onLikeToggle={() => handleLikeToggle(flight.id)} />
+                </div>
             </div>
         </div>
         <div className="flex items-center space-x-3 text-lg text-gray-300 pt-4 border-t border-gray-700/50">
             <MapPin size={20} className="text-cyan-400"/>
             <span className="font-semibold">{flight.takeoff}</span>
+             {currentUser && (
+                <button 
+                  onClick={() => handleFollowTakeoff(flight.takeoff)}
+                  title={isTakeoffFollowed ? `Deixar de seguir ${flight.takeoff}` : `Seguir ${flight.takeoff}`}
+                >
+                  <Bookmark size={18} className={`transition-colors ${isTakeoffFollowed ? 'text-cyan-400 fill-current' : 'text-gray-500 hover:text-cyan-400'}`} />
+                </button>
+              )}
             <ArrowRight size={20} className="text-gray-500" />
             <span className="font-semibold">{flight.landing}</span>
         </div>

@@ -2,7 +2,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import type { Flight } from '../types';
-import { MapPin, ArrowRight, TrendingUp, Clock, Mountain } from 'lucide-react';
+import { MapPin, ArrowRight, TrendingUp, Clock, Mountain, Bookmark } from 'lucide-react';
 import MapDisplay from './MapDisplay';
 import { useAuth } from '../contexts/AuthContext';
 import { formatDuration } from '../utils';
@@ -104,9 +104,21 @@ const GliderTypeIcon: React.FC<{type: 'paraglider' | 'hangglider'}> = ({ type })
 interface FlightCardProps {
   flight: Flight;
   onLikeToggle: (flightId: string) => void;
+  onFollowTakeoff: (takeoffName: string) => void;
 }
 
-const FlightCard: React.FC<FlightCardProps> = ({ flight, onLikeToggle }) => {
+const FlightCard: React.FC<FlightCardProps> = ({ flight, onLikeToggle, onFollowTakeoff }) => {
+  const { currentUser } = useAuth();
+  const isTakeoffFollowed = currentUser?.followingTakeoffs.includes(flight.takeoff) ?? false;
+  
+  const handleFollowClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if(currentUser) {
+      onFollowTakeoff(flight.takeoff);
+    }
+  }
+
   return (
     <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-cyan-500/30 hover:ring-2 hover:ring-cyan-500/50">
       <div className="grid grid-cols-1 md:grid-cols-3">
@@ -131,9 +143,18 @@ const FlightCard: React.FC<FlightCardProps> = ({ flight, onLikeToggle }) => {
                   <ArrowRight size={16} />
               </Link>
             </div>
-            <div className="flex items-center space-x-2 text-sm text-gray-400 mb-4">
+            <div className="flex items-center space-x-2 text-sm text-gray-400 mb-4 group">
               <MapPin size={16}/>
               <span>{flight.takeoff}</span>
+              {currentUser && (
+                <button 
+                  onClick={handleFollowClick} 
+                  title={isTakeoffFollowed ? `Deixar de seguir ${flight.takeoff}` : `Seguir ${flight.takeoff}`}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                  <Bookmark size={16} className={`transition-colors ${isTakeoffFollowed ? 'text-cyan-400 fill-current' : 'text-gray-500 hover:text-cyan-400'}`} />
+                </button>
+              )}
             </div>
           </div>
           <div className="flex items-end justify-between">

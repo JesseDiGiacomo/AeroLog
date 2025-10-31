@@ -14,6 +14,11 @@ export interface Pilot {
   totalDistance: number;
   cpf: string;
   email: string;
+
+  // Social features
+  followers: string[]; // Array of pilot IDs who follow this pilot
+  followingPilots: string[]; // Array of pilot IDs this pilot follows
+  followingTakeoffs: string[]; // Array of takeoff location names this pilot follows
 }
 
 export interface Flight {

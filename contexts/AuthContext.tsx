@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { Pilot } from '../types';
 import * as authService from '../services/authService';
@@ -9,7 +10,7 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<Pilot | null>;
   logout: () => void;
   isAuthenticated: boolean;
-  updateCurrentUser: (updatedPilotData: Partial<Pick<Pilot, 'name' | 'avatarUrl'>>) => void;
+  updateCurrentUser: (updatedPilotData: Partial<Pilot>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -44,7 +45,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setCurrentUser(null);
   };
 
-  const updateCurrentUser = (updatedPilotData: Partial<Pick<Pilot, 'name' | 'avatarUrl'>>) => {
+  const updateCurrentUser = (updatedPilotData: Partial<Pilot>) => {
     if (currentUser) {
       const updatedUser = { ...currentUser, ...updatedPilotData };
       setCurrentUser(updatedUser);

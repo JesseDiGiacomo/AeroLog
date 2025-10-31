@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Pilot, Flight } from '../types';
-import { getPilotById, getFlightsByPilot, updatePilotDetails, toggleFlightLike } from '../services/flightService';
+// FIX: Imported toggleFollowTakeoff to handle following takeoffs from this page.
+import { getPilotById, getFlightsByPilot, updatePilotDetails, toggleFlightLike, toggleFollowPilot, toggleFollowTakeoff } from '../services/flightService';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import FlightCard from '../components/FlightCard';
 import { formatDuration } from '../utils';
-import { Hash, TrendingUp, Sun, Clock, BarChart, Award, Target, Triangle, Camera, Edit, Save, X, MoveRight, GitBranch } from 'lucide-react';
+import { Hash, TrendingUp, Sun, Clock, BarChart, Award, Target, Triangle, Camera, Edit, Save, X, MoveRight, GitBranch, UserPlus, UserCheck, Users } from 'lucide-react';
 
 const StatRow = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string | number }) => (
     <div className="flex items-center justify-between py-3 border-b border-gray-700/50 last:border-b-0">
@@ -33,6 +34,7 @@ const Profile: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isOwnProfile = currentUser?.id === id;
+  const isFollowing = currentUser?.followingPilots.includes(id!) ?? false;
 
   useEffect(() => {
     if (!id) return;
@@ -107,6 +109,31 @@ const Profile: React.FC = () => {
       console.error("Failed to toggle like", error);
     }
   };
+  
+  const handleFollowToggle = async () => {
+    if (!currentUser || !pilot || isOwnProfile) return;
+    try {
+        const result = await toggleFollowPilot(currentUser.id, pilot.id);
+        if (result) {
+            updateCurrentUser({ followingPilots: result.currentUser.followingPilots });
+            setPilot(result.targetPilot);
+        }
+    } catch (error) {
+        console.error("Failed to toggle follow", error);
+    }
+  };
+
+  const handleFollowTakeoff = async (takeoffName: string) => {
+    if (!currentUser) return;
+    try {
+      const updatedPilot = await toggleFollowTakeoff(currentUser.id, takeoffName);
+      if (updatedPilot) {
+        updateCurrentUser({ followingTakeoffs: updatedPilot.followingTakeoffs });
+      }
+    } catch (error) {
+      console.error("Failed to follow takeoff", error);
+    }
+  };
 
   const stats = useMemo(() => {
     if (!flights || flights.length === 0) {
@@ -172,9 +199,9 @@ const Profile: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div className="bg-gray-800 rounded-lg shadow-lg p-6 flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
-        <div className="relative group">
-          <img src={pilot.avatarUrl} alt={pilot.name} className="w-24 h-24 rounded-full border-4 border-cyan-400 object-cover" />
+      <div className="bg-gray-800 rounded-lg shadow-lg p-6 flex flex-col sm:flex-row items-center sm:items-stretch gap-6">
+        <div className="relative group flex-shrink-0">
+          <img src={pilot.avatarUrl} alt={pilot.name} className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-cyan-400 object-cover" />
           {isOwnProfile && (
             <>
               <div 
@@ -194,36 +221,59 @@ const Profile: React.FC = () => {
             </>
           )}
         </div>
-        <div className="flex-grow text-center sm:text-left">
-          {isOwnProfile && isEditingName ? (
-            <div className="flex items-center space-x-2">
-              <input 
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleNameSave()}
-                className="bg-gray-700 text-white text-3xl font-bold rounded-md px-2 py-1 w-full focus:ring-2 focus:ring-cyan-500 outline-none"
-                autoFocus
-              />
-              <button onClick={handleNameSave} className="p-2 text-green-400 hover:text-green-300 transition-colors" aria-label="Salvar nome">
-                <Save size={24} />
-              </button>
-              <button onClick={() => setIsEditingName(false)} className="p-2 text-red-400 hover:text-red-300 transition-colors" aria-label="Cancelar edição do nome">
-                <X size={24} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center sm:justify-start space-x-3">
-              <h1 className="text-3xl font-bold text-white">{pilot.name}</h1>
-              {isOwnProfile && (
-                <button onClick={() => setIsEditingName(true)} className="p-2 text-gray-400 hover:text-cyan-400 transition-colors" aria-label="Editar nome">
-                  <Edit size={20} />
+        <div className="flex-grow text-center sm:text-left flex flex-col">
+          <div className="flex-grow">
+            {isOwnProfile && isEditingName ? (
+              <div className="flex items-center space-x-2">
+                <input 
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleNameSave()}
+                  className="bg-gray-700 text-white text-3xl font-bold rounded-md px-2 py-1 w-full focus:ring-2 focus:ring-cyan-500 outline-none"
+                  autoFocus
+                />
+                <button onClick={handleNameSave} className="p-2 text-green-400 hover:text-green-300 transition-colors" aria-label="Salvar nome">
+                  <Save size={24} />
                 </button>
-              )}
-            </div>
-          )}
-           <p className="text-gray-400 mt-1">Voando desde 2018 | Membro de Asas do Cerrado</p>
+                <button onClick={() => setIsEditingName(false)} className="p-2 text-red-400 hover:text-red-300 transition-colors" aria-label="Cancelar edição do nome">
+                  <X size={24} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center sm:justify-start space-x-3">
+                <h1 className="text-3xl font-bold text-white">{pilot.name}</h1>
+                {isOwnProfile && (
+                  <button onClick={() => setIsEditingName(true)} className="p-2 text-gray-400 hover:text-cyan-400 transition-colors" aria-label="Editar nome">
+                    <Edit size={20} />
+                  </button>
+                )}
+              </div>
+            )}
+            <p className="text-gray-400 mt-1">Voando desde 2018 | Membro de Asas do Cerrado</p>
+          </div>
+          <div className="flex items-center justify-center sm:justify-start space-x-6 mt-4">
+              <div className="text-center">
+                  <p className="text-xl font-bold text-white">{pilot.followers.length}</p>
+                  <p className="text-sm text-gray-400">Seguidores</p>
+              </div>
+               <div className="text-center">
+                  <p className="text-xl font-bold text-white">{pilot.followingPilots.length}</p>
+                  <p className="text-sm text-gray-400">Seguindo</p>
+              </div>
+          </div>
         </div>
+        {currentUser && !isOwnProfile && (
+            <div className="sm:ml-auto flex-shrink-0">
+                <button 
+                  onClick={handleFollowToggle}
+                  className={`flex items-center justify-center space-x-2 w-32 px-4 py-2 font-semibold rounded-lg transition-colors ${isFollowing ? 'bg-gray-600 hover:bg-gray-500 text-white' : 'bg-cyan-500 hover:bg-cyan-400 text-white'}`}
+                >
+                  {isFollowing ? <UserCheck size={20} /> : <UserPlus size={20} />}
+                  <span>{isFollowing ? 'Seguindo' : 'Seguir'}</span>
+                </button>
+            </div>
+        )}
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -260,7 +310,7 @@ const Profile: React.FC = () => {
           <h2 className="text-2xl font-semibold text-white border-l-4 border-cyan-400 pl-4 mb-6">Histórico de Voos</h2>
           {flights && flights.length > 0 ? (
             <div className="space-y-6">
-              {flights.map(flight => <FlightCard key={flight.id} flight={flight} onLikeToggle={handleLikeToggle} />)}
+              {flights.map(flight => <FlightCard key={flight.id} flight={flight} onLikeToggle={handleLikeToggle} onFollowTakeoff={handleFollowTakeoff} />)}
             </div>
           ) : (
             <div className="text-center p-8 bg-gray-800 rounded-lg">

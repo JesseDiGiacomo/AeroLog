@@ -3,9 +3,9 @@ import type { Flight, Pilot, TrackPoint } from '../types';
 
 // Mock Data
 const pilots: Pilot[] = [
-  { id: '1', name: 'Alex Maverick', avatarUrl: 'https://picsum.photos/seed/alex/200', flights: 7, totalDistance: 856.9, cpf: '111.222.333-44', email: 'alex@aerolog.com' },
-  { id: '2', name: 'Bella Skyrunner', avatarUrl: 'https://picsum.photos/seed/bella/200', flights: 2, totalDistance: 155.8, cpf: '222.333.444-55', email: 'bella@aerolog.com' },
-  { id: '3', name: 'Carlos Cloud', avatarUrl: 'https://picsum.photos/seed/carlos/200', flights: 2, totalDistance: 170.5, cpf: '333.444.555-66', email: 'carlos@aerolog.com' },
+  { id: '1', name: 'Alex Maverick', avatarUrl: 'https://picsum.photos/seed/alex/200', flights: 7, totalDistance: 856.9, cpf: '111.222.333-44', email: 'alex@aerolog.com', followers: ['2'], followingPilots: ['3'], followingTakeoffs: ['Annecy, France'] },
+  { id: '2', name: 'Bella Skyrunner', avatarUrl: 'https://picsum.photos/seed/bella/200', flights: 2, totalDistance: 155.8, cpf: '222.333.444-55', email: 'bella@aerolog.com', followers: [], followingPilots: ['1'], followingTakeoffs: [] },
+  { id: '3', name: 'Carlos Cloud', avatarUrl: 'https://picsum.photos/seed/carlos/200', flights: 2, totalDistance: 170.5, cpf: '333.444.555-66', email: 'carlos@aerolog.com', followers: ['1'], followingPilots: [], followingTakeoffs: ['Quixadá, Brazil'] },
 ];
 
 const flights: Flight[] = [
@@ -393,6 +393,42 @@ export const toggleFlightLike = async (flightId: string, pilotId: string): Promi
       flight.likes++;
     }
     return simulateDelay({ ...flight }); // Return a copy
+  }
+  return simulateDelay(undefined);
+};
+
+export const toggleFollowPilot = async (currentUserId: string, targetPilotId: string): Promise<{ currentUser: Pilot, targetPilot: Pilot } | undefined> => {
+  const currentUser = pilots.find(p => p.id === currentUserId);
+  const targetPilot = pilots.find(p => p.id === targetPilotId);
+
+  if (currentUser && targetPilot) {
+    const isFollowing = currentUser.followingPilots.includes(targetPilotId);
+    if (isFollowing) {
+      // Unfollow
+      currentUser.followingPilots = currentUser.followingPilots.filter(id => id !== targetPilotId);
+      targetPilot.followers = targetPilot.followers.filter(id => id !== currentUserId);
+    } else {
+      // Follow
+      currentUser.followingPilots.push(targetPilotId);
+      targetPilot.followers.push(currentUserId);
+    }
+    return simulateDelay({ currentUser: { ...currentUser }, targetPilot: { ...targetPilot } });
+  }
+  return simulateDelay(undefined);
+};
+
+export const toggleFollowTakeoff = async (currentUserId: string, takeoffName: string): Promise<Pilot | undefined> => {
+  const currentUser = pilots.find(p => p.id === currentUserId);
+  if (currentUser) {
+    const isFollowing = currentUser.followingTakeoffs.includes(takeoffName);
+    if (isFollowing) {
+      // Unfollow
+      currentUser.followingTakeoffs = currentUser.followingTakeoffs.filter(name => name !== takeoffName);
+    } else {
+      // Follow
+      currentUser.followingTakeoffs.push(takeoffName);
+    }
+    return simulateDelay({ ...currentUser });
   }
   return simulateDelay(undefined);
 };
