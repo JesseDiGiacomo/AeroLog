@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import type { DetailedTrackPoint } from '../types';
 import { AreaChart, LineChart, TrendingUp, TrendingDown } from 'lucide-react';
@@ -23,6 +24,7 @@ const COLORS = {
 interface FlightChartProps {
   trackData: DetailedTrackPoint[];
   onPointClick: (point: DetailedTrackPoint | null) => void;
+  syncedPoint: DetailedTrackPoint | null;
 }
 
 const HtmlTooltip: React.FC<{
@@ -93,7 +95,7 @@ const findClosestPointIndex = (data: DetailedTrackPoint[], targetTime: number): 
 };
 
 
-const FlightChart: React.FC<FlightChartProps> = ({ trackData, onPointClick }) => {
+const FlightChart: React.FC<FlightChartProps> = ({ trackData, onPointClick, syncedPoint }) => {
   const [visibleSeries, setVisibleSeries] = useState({
     altitude: true,
     speed: true,
@@ -282,6 +284,21 @@ const FlightChart: React.FC<FlightChartProps> = ({ trackData, onPointClick }) =>
     );
   };
 
+  const SyncedIndicator = () => {
+    if (!syncedPoint) return null;
+    const x = scales.xScale(syncedPoint.timestamp);
+
+    if (x < PADDING.left || x > PADDING.left + CHART_WIDTH) return null;
+
+    return (
+        <g transform={`translate(${x}, 0)`} pointerEvents="none">
+            <line y1={PADDING.top} y2={PADDING.top + CHART_HEIGHT} stroke={COLORS.speed} strokeWidth="1.5" />
+            {visibleSeries.altitude && <circle cy={scales.altitudeYScale(syncedPoint.altitude)} r="5" fill={COLORS.altitude} stroke="white" strokeWidth="2" />}
+            {visibleSeries.speed && <circle cy={scales.speedYScale(syncedPoint.speed)} r="5" fill={COLORS.speed} stroke="white" strokeWidth="2" />}
+        </g>
+    );
+  };
+
   if (trackData.length < 2) {
     return (
       <div className="flex items-center justify-center h-96 text-gray-500">
@@ -349,6 +366,7 @@ const FlightChart: React.FC<FlightChartProps> = ({ trackData, onPointClick }) =>
                 onClick={handleClick}
             />
             <HoverIndicator />
+            <SyncedIndicator />
         </svg>
         <div className="bg-gray-800 rounded-b-lg pb-2">
             <Legend />

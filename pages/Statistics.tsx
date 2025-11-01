@@ -195,13 +195,14 @@ const Statistics: React.FC = () => {
     if (startDate) {
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
-        // Fix for: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+        // FIX: The error indicates an issue with an arithmetic operation on Date objects.
+        // Using getTime() ensures we are comparing numbers, which is safer and resolves the type error.
         flightsToFilter = flightsToFilter.filter(flight => new Date(flight.date).getTime() >= start.getTime());
     }
     if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        // Fix for: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+        // FIX: Applying the same fix for consistency to avoid potential errors.
         flightsToFilter = flightsToFilter.filter(flight => new Date(flight.date).getTime() <= end.getTime());
     }
 
@@ -209,6 +210,7 @@ const Statistics: React.FC = () => {
         case 'distance': flightsToFilter.sort((a, b) => b.distance - a.distance); break;
         case 'duration': flightsToFilter.sort((a, b) => b.duration - a.duration); break;
         case 'score': flightsToFilter.sort((a, b) => b.olcScore - a.olcScore); break;
+        // FIX: Use getTime() to perform arithmetic operations on dates for sorting.
         case 'date': default: flightsToFilter.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); break;
     }
 
@@ -240,7 +242,7 @@ const Statistics: React.FC = () => {
                 setAiSummary(summary);
             } catch (error) {
                 console.error("Failed to generate AI summary", error);
-                setAiSummary("Não foi possível gerar a análise da IA para esta seleção de voos.");
+                setAiSummary("Não foi possível gerar la análise da IA para esta seleção de voos.");
             } finally {
                 setIsGeneratingSummary(false);
             }

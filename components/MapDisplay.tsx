@@ -99,16 +99,48 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ track, interactive = true, faiT
 
     if (syncedPoint) {
       const pos = L.latLng(syncedPoint.lat, syncedPoint.lon);
-      const icon = L.divIcon({
-        className: 'sync-marker',
-        html: '',
-        iconSize: [22, 22], // width: 16px + border: 3px * 2 = 22px
-        iconAnchor: [11, 11], // Center the icon
+      
+      const circleMarker = L.circleMarker(pos, {
+        radius: 8,
+        fillColor: "#facc15", // tailwind yellow-400
+        color: "#ffffff",      // white for border
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.9,
+        pane: 'markerPane' // Ensure it's on top of polylines
       });
 
-      const marker = L.marker(pos, { icon, zIndexOffset: 1000 });
-      syncLayerRef.current.addLayer(marker);
-      syncLayerRef.current.bringToFront();
+      const climbColor = syncedPoint.climbRate >= 0 ? '#4ade80' : '#f87171';
+
+      const tooltipContent = `
+        <div style="font-family: monospace; font-size: 12px; line-height: 1.4;">
+          <div style="display: flex; justify-content: space-between; gap: 8px;">
+            <span style="color: #9ca3af;">ALT</span>
+            <span>${syncedPoint.altitude.toFixed(0)}m</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 8px;">
+            <span style="color: #9ca3af;">AGL</span>
+            <span>${syncedPoint.agl.toFixed(0)}m</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 8px;">
+            <span style="color: #9ca3af;">VEL</span>
+            <span>${syncedPoint.speed.toFixed(1)}km/h</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 8px;">
+            <span style="color: #9ca3af;">SUB</span>
+            <span style="color: ${climbColor}; font-weight: bold;">${syncedPoint.climbRate.toFixed(1)}m/s</span>
+          </div>
+        </div>
+      `;
+
+      circleMarker.bindTooltip(tooltipContent, {
+        permanent: true,
+        direction: 'right',
+        offset: [12, 0],
+        className: 'pilot-info-tooltip'
+      });
+
+      syncLayerRef.current.addLayer(circleMarker);
     }
   }, [syncedPoint]);
 

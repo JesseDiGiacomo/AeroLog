@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import type { Flight, Comment, DetailedTrackPoint } from '../types';
@@ -6,6 +7,7 @@ import { generateFlightSummary } from '../services/geminiService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import MapDisplay from '../components/MapDisplay';
 import FlightChart from '../components/FlightChart';
+import TimelineControl from '../components/TimelineControl';
 import { useAuth } from '../contexts/AuthContext';
 import { LikeButton } from '../components/FlightCard';
 import { formatDuration } from '../utils';
@@ -34,6 +36,7 @@ const FlightDetail: React.FC = () => {
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [syncedTrackPoint, setSyncedTrackPoint] = useState<DetailedTrackPoint | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   
   const { currentUser, updateCurrentUser } = useAuth();
   const navigate = useNavigate();
@@ -128,6 +131,39 @@ const FlightDetail: React.FC = () => {
     }
     return points;
   }, [flight]);
+
+  // Set initial sync point once data is ready
+  useEffect(() => {
+    if (!syncedTrackPoint && detailedTrackData.length > 0) {
+      setSyncedTrackPoint(detailedTrackData[0]);
+    }
+  }, [detailedTrackData, syncedTrackPoint]);
+
+  // Animation effect
+  useEffect(() => {
+    if (!isPlaying || detailedTrackData.length < 2) {
+      return;
+    }
+
+    const animationSpeed = 100; // ms per point
+
+    const interval = setInterval(() => {
+      setSyncedTrackPoint(prevPoint => {
+        if (!prevPoint) return detailedTrackData[0];
+        
+        const currentIndex = detailedTrackData.findIndex(p => p.timestamp === prevPoint.timestamp);
+        
+        if (currentIndex === -1 || currentIndex >= detailedTrackData.length - 1) {
+          setIsPlaying(false); // Stop at the end
+          return detailedTrackData[detailedTrackData.length - 1];
+        }
+        
+        return detailedTrackData[currentIndex + 1];
+      });
+    }, animationSpeed); 
+
+    return () => clearInterval(interval);
+  }, [isPlaying, detailedTrackData]);
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,6 +283,13 @@ const FlightDetail: React.FC = () => {
     window.location.href = mailtoLink;
   };
 
+  const handlePointSync = (point: DetailedTrackPoint | null) => {
+    if (point) {
+        setIsPlaying(false); // Pausa a animação na interação manual
+        setSyncedTrackPoint(point);
+    }
+  };
+
   if (isLoading) {
     return <LoadingSpinner text="Carregando detalhes do voo..." />;
   }
@@ -318,11 +361,21 @@ const FlightDetail: React.FC = () => {
       </header>
       
       {/* Mapa do Trajeto */}
-      <div className="h-96 md:h-[500px] bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-        <MapDisplay 
-          track={flight.track} 
-          faiTriangleTurnpoints={flight.faiTriangle?.turnpoints}
+      <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+        <div className="h-96 md:h-[500px]">
+            <MapDisplay 
+              track={flight.track} 
+              faiTriangleTurnpoints={flight.faiTriangle?.turnpoints}
+              syncedPoint={syncedTrackPoint}
+            />
+        </div>
+        {/* Timeline Control */}
+        <TimelineControl 
+          trackData={detailedTrackData}
           syncedPoint={syncedTrackPoint}
+          onSyncPoint={handlePointSync}
+          isPlaying={isPlaying}
+          onTogglePlay={() => setIsPlaying(!isPlaying)}
         />
       </div>
       
@@ -334,7 +387,8 @@ const FlightDetail: React.FC = () => {
         </h2>
         <FlightChart 
           trackData={detailedTrackData} 
-          onPointClick={setSyncedTrackPoint}
+          onPointClick={handlePointSync}
+          syncedPoint={syncedTrackPoint}
         />
       </div>
 
