@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Pilot, Flight } from '../types';
-// FIX: Imported toggleFollowTakeoff to handle following takeoffs from this page.
 import { getPilotById, getFlightsByPilot, updatePilotDetails, toggleFlightLike, toggleFollowPilot, toggleFollowTakeoff } from '../services/flightService';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';

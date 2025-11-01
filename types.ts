@@ -1,4 +1,3 @@
-
 export type TrackPoint = [number, number]; // [latitude, longitude]
 
 export interface FAIAnalysis {
@@ -61,4 +60,16 @@ export interface Comment {
   author: Pilot;
   text: string;
   timestamp: string;
+}
+
+export interface DetailedTrackPoint {
+  timestamp: number;
+  timeLabel: string;
+  lat: number;
+  lon: number;
+  altitude: number;
+  agl: number; // Altitude Above Ground Level
+  speed: number;
+  climbRate: number;
+  terrainAltitude: number;
 }

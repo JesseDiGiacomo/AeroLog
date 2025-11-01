@@ -1,8 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Flight } from '../types';
-// FIX: Imported toggleFollowTakeoff to pass the handler to FlightCard.
 import { getFlights, toggleFlightLike, toggleFollowTakeoff } from '../services/flightService';
 import { generateFlightStatisticsSummary } from '../services/geminiService';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -31,7 +30,7 @@ const FlightsByTakeoffChart: React.FC<{ data: { name: string; count: number }[] 
   
   const maxValue = Math.max(...data.map(d => d.count));
   const chartHeight = data.length * 40 + 20;
-  const labelWidth = 120;
+  const labelWidthPercent = 30;
   const barHeight = 25;
 
   return (
@@ -41,7 +40,7 @@ const FlightsByTakeoffChart: React.FC<{ data: { name: string; count: number }[] 
         <g>
           {data.map((item, index) => {
             const y = index * 40 + 10;
-            const barWidth = ((item.count / maxValue) * (100 - (labelWidth/4))) ;
+            const barWidth = maxValue > 0 ? (item.count / maxValue) * (100 - labelWidthPercent) : 0;
             return (
               <g
                 key={item.name}
@@ -53,24 +52,15 @@ const FlightsByTakeoffChart: React.FC<{ data: { name: string; count: number }[] 
                   {item.name.length > 15 ? `${item.name.substring(0, 15)}...` : item.name}
                 </text>
                 <rect
-                  x={labelWidth}
+                  x={`${labelWidthPercent}%`}
                   y={y}
                   width={`${barWidth}%`}
                   height={barHeight}
-                  className="fill-current text-gray-600 group-hover:text-cyan-500 transition-colors"
+                  className="fill-current text-cyan-400 group-hover:text-cyan-300 transition-colors"
                   rx="3"
                   aria-label={`Quantidade: ${item.count} voos`}
                 />
-                 <rect
-                  x={labelWidth}
-                  y={y}
-                  width={`${barWidth}%`}
-                  height={barHeight}
-                  className="fill-current text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ transition: 'width 0.3s ease-in-out' }}
-                  rx="3"
-                />
-                <text x={labelWidth + 10} y={y + barHeight / 2} dy=".35em" className="text-xs font-bold fill-current text-white">
+                <text x={`${labelWidthPercent}%`} transform="translate(5, 0)" y={y + barHeight / 2} dy=".35em" className="text-xs font-bold fill-current text-white">
                   {item.count}
                 </text>
               </g>
@@ -142,7 +132,6 @@ const Statistics: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasSearched, setHasSearched] = useState(false);
   
-  // FIX: Destructured updateCurrentUser to be used in handleFollowTakeoff.
   const { currentUser, updateCurrentUser } = useAuth();
   const navigate = useNavigate();
 
@@ -182,6 +171,64 @@ const Statistics: React.FC = () => {
     fetchAllFlights();
   }, []);
 
+  const applyFilters = useCallback(() => {
+    let flightsToFilter = [...allFlights];
+
+    if (takeoffFilter) {
+      flightsToFilter = flightsToFilter.filter(flight =>
+        flight.takeoff.toLowerCase().includes(takeoffFilter.toLowerCase())
+      );
+    }
+    if (pilotNameFilter) {
+      flightsToFilter = flightsToFilter.filter(flight =>
+        flight.pilot.name.toLowerCase().includes(pilotNameFilter.toLowerCase())
+      );
+    }
+    if (yearFilter !== 'all') {
+      flightsToFilter = flightsToFilter.filter(flight =>
+        new Date(flight.date).getFullYear() === parseInt(yearFilter, 10)
+      );
+    }
+    if (gliderTypeFilter !== 'all') {
+        flightsToFilter = flightsToFilter.filter(f => f.gliderType === gliderTypeFilter);
+    }
+    if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        // Fix for: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+        flightsToFilter = flightsToFilter.filter(flight => new Date(flight.date).getTime() >= start.getTime());
+    }
+    if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        // Fix for: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+        flightsToFilter = flightsToFilter.filter(flight => new Date(flight.date).getTime() <= end.getTime());
+    }
+
+    switch (sortOption) {
+        case 'distance': flightsToFilter.sort((a, b) => b.distance - a.distance); break;
+        case 'duration': flightsToFilter.sort((a, b) => b.duration - a.duration); break;
+        case 'score': flightsToFilter.sort((a, b) => b.olcScore - a.olcScore); break;
+        case 'date': default: flightsToFilter.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); break;
+    }
+
+    setFilteredFlights(flightsToFilter);
+    setShowTakeoffSuggestions(false);
+    setShowPilotSuggestions(false);
+  }, [allFlights, takeoffFilter, pilotNameFilter, yearFilter, gliderTypeFilter, startDate, endDate, sortOption]);
+
+  useEffect(() => {
+    const areFiltersActive = takeoffFilter || pilotNameFilter || yearFilter !== 'all' || gliderTypeFilter !== 'all' || startDate || endDate;
+
+    if (areFiltersActive) {
+      applyFilters();
+      setHasSearched(true);
+    } else {
+      setFilteredFlights([]);
+      setHasSearched(false);
+    }
+  }, [takeoffFilter, pilotNameFilter, yearFilter, gliderTypeFilter, startDate, endDate, sortOption, allFlights, applyFilters]);
+
   useEffect(() => {
     if (hasSearched && filteredFlights.length > 0) {
         const generateAnalysis = async () => {
@@ -220,7 +267,7 @@ const Statistics: React.FC = () => {
                 const bucket = buckets.find(b => flight.distance >= b.min && flight.distance < b.max);
                 if (bucket) bucket.count++;
             });
-            const filteredBuckets = buckets.filter(b => b.count > 0 || buckets.some(inner => inner.count > 0));
+            const filteredBuckets = buckets.filter(b => b.count > 0);
 
             setChartData({ takeoffs: takeoffData, distances: filteredBuckets });
         };
@@ -285,76 +332,6 @@ const Statistics: React.FC = () => {
     setShowPilotSuggestions(false);
   };
 
-
-  const applyFilters = () => {
-    let flightsToFilter = [...allFlights];
-
-    // Filter by takeoff location (case-insensitive)
-    if (takeoffFilter) {
-      flightsToFilter = flightsToFilter.filter(flight =>
-        flight.takeoff.toLowerCase().includes(takeoffFilter.toLowerCase())
-      );
-    }
-    
-    // Filter by pilot name
-    if (pilotNameFilter) {
-      flightsToFilter = flightsToFilter.filter(flight =>
-        flight.pilot.name.toLowerCase().includes(pilotNameFilter.toLowerCase())
-      );
-    }
-
-    // Filter by year
-    if (yearFilter !== 'all') {
-      flightsToFilter = flightsToFilter.filter(flight =>
-        new Date(flight.date).getFullYear() === parseInt(yearFilter, 10)
-      );
-    }
-
-    // Filter by glider type
-    if (gliderTypeFilter !== 'all') {
-        flightsToFilter = flightsToFilter.filter(f => f.gliderType === gliderTypeFilter);
-    }
-
-    // Filter by date range
-    if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        flightsToFilter = flightsToFilter.filter(flight => new Date(flight.date) >= start);
-    }
-    if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        flightsToFilter = flightsToFilter.filter(flight => new Date(flight.date) <= end);
-    }
-
-    // Apply sorting
-    switch (sortOption) {
-        case 'distance':
-            flightsToFilter.sort((a, b) => b.distance - a.distance);
-            break;
-        case 'duration':
-            flightsToFilter.sort((a, b) => b.duration - a.duration);
-            break;
-        case 'score':
-            flightsToFilter.sort((a, b) => b.olcScore - a.olcScore);
-            break;
-        case 'date':
-        default:
-            flightsToFilter.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            break;
-    }
-
-    setFilteredFlights(flightsToFilter);
-    setShowTakeoffSuggestions(false);
-    setShowPilotSuggestions(false);
-  };
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    applyFilters();
-    setHasSearched(true);
-  };
-  
   const handleLikeToggle = async (flightId: string) => {
     if (!currentUser) {
       navigate('/login');
@@ -395,8 +372,6 @@ const Statistics: React.FC = () => {
     setEndDate('');
     setSortOption('date');
     setGliderTypeFilter('all');
-    setFilteredFlights([]);
-    setHasSearched(false);
   };
 
   return (
@@ -407,7 +382,7 @@ const Statistics: React.FC = () => {
       </div>
 
       <div className="bg-gray-800 rounded-lg shadow-lg p-6">
-        <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           {/* Takeoff Filter */}
           <div className="w-full md:col-span-3 relative">
             <label htmlFor="takeoff" className="block text-sm font-medium text-gray-300 mb-1">Local de Decolagem</label>
@@ -550,17 +525,13 @@ const Statistics: React.FC = () => {
             </div>
          
 
-          <div className="md:col-span-6 flex flex-col sm:flex-row gap-4">
-              <button type="submit" className="w-full sm:w-auto flex-grow bg-cyan-500 hover:bg-cyan-400 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors">
-                  <Search size={20} />
-                  <span>Buscar</span>
-              </button>
+          <div className="md:col-span-6">
               <button type="button" onClick={resetFilters} className="w-full sm:w-auto bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition-colors">
                   <X size={20} />
                   <span>Limpar Filtros</span>
               </button>
           </div>
-        </form>
+        </div>
       </div>
       
       {/* --- Results Section --- */}
@@ -571,7 +542,7 @@ const Statistics: React.FC = () => {
           </div>
         ) : !hasSearched ? (
            <div className="text-center p-8 bg-gray-800 rounded-lg">
-            <p className="text-gray-400">Utilize os filtros acima e clique em "Buscar" para ver os resultados.</p>
+            <p className="text-gray-400">Utilize os filtros acima para explorar os voos.</p>
           </div>
         ) : (
           <div className="space-y-8">

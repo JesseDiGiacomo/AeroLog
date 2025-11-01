@@ -1,18 +1,18 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import type { Flight, Comment } from '../types';
+import type { Flight, Comment, DetailedTrackPoint } from '../types';
 import { getFlightById, toggleFlightLike, toggleFollowTakeoff, addComment, deleteComment } from '../services/flightService';
 import { generateFlightSummary } from '../services/geminiService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import MapDisplay from '../components/MapDisplay';
+import FlightChart from '../components/FlightChart';
 import { useAuth } from '../contexts/AuthContext';
 import { LikeButton } from '../components/FlightCard';
 import { formatDuration } from '../utils';
 import { 
   Sparkles, MessageSquare, Award, MapPin, ArrowRight, List, Clock, Hourglass, ChevronsUp,
   ChevronsDown, Wind, Gauge, Mountain, MountainSnow, TrendingUp, Medal, Triangle,
-  GitBranch, MoveRight, Loader, Flag, Share2, Check, Bookmark, Trash2
+  GitBranch, MoveRight, Loader, Flag, Share2, Check, Bookmark, Trash2, BarChart3
 } from 'lucide-react';
 
 const StatItem = ({ icon, label, value, iconClassName = "text-cyan-400" }: { icon: React.ReactNode, label: string, value: string | number, iconClassName?: string }) => (
@@ -33,6 +33,7 @@ const FlightDetail: React.FC = () => {
   const [aiSummary, setAiSummary] = useState<string>('');
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [syncedTrackPoint, setSyncedTrackPoint] = useState<DetailedTrackPoint | null>(null);
   
   const { currentUser, updateCurrentUser } = useAuth();
   const navigate = useNavigate();
@@ -72,6 +73,62 @@ const FlightDetail: React.FC = () => {
     autoGenerateSummary();
   }, [flight]);
   
+  const detailedTrackData = useMemo<DetailedTrackPoint[]>(() => {
+    if (!flight || !flight.track || flight.track.length < 2) return [];
+    
+    const { track, duration, takeoffTime, maxAltitude, takeoffAltitude, minAltitude, avgSpeed, maxSpeed } = flight;
+    if (!duration || !takeoffTime || !maxAltitude || !takeoffAltitude) return [];
+    
+    const points: DetailedTrackPoint[] = [];
+    const startTime = new Date(takeoffTime).getTime();
+    const numPoints = Math.max(duration, 200); // More points for smoother interpolation
+
+    let lastAltitude = takeoffAltitude;
+
+    for (let i = 0; i <= numPoints; i++) {
+        const progress = i / numPoints;
+        const timestamp = startTime + (progress * duration * 60 * 1000);
+
+        // Interpolate Lat/Lon
+        const trackProgress = progress * (track.length - 1);
+        const segmentIndex = Math.floor(trackProgress);
+        const segmentProgress = trackProgress - segmentIndex;
+        const startPoint = track[segmentIndex];
+        const endPoint = track[Math.min(segmentIndex + 1, track.length - 1)];
+
+        const lat = startPoint[0] + (endPoint[0] - startPoint[0]) * segmentProgress;
+        const lon = startPoint[1] + (endPoint[1] - startPoint[1]) * segmentProgress;
+
+        // Altitude: Parabolic curve from takeoff to max back to landing with noise
+        const parabolicAlt = takeoffAltitude + (maxAltitude - takeoffAltitude) * (4 * progress * (1 - progress));
+        const noise = (Math.sin(progress * Math.PI * 10) * (maxAltitude - takeoffAltitude) * 0.05);
+        const altitude = parabolicAlt + noise;
+        
+        // Terrain: Simple sine wave to represent hills
+        const terrainAltitude = minAltitude + (takeoffAltitude - minAltitude) * Math.sin(progress * Math.PI) + (Math.sin(progress * Math.PI * 5) * 100);
+        
+        // Speed: Ramps up, cruises, ramps down
+        const speed = avgSpeed + (maxSpeed - avgSpeed) * Math.sin(progress * Math.PI) * 0.8;
+        
+        // Climb Rate: Calculated from altitude change
+        const climbRate = i > 0 ? ((altitude - lastAltitude) / ((duration * 60) / numPoints)) : 0;
+        lastAltitude = altitude;
+        
+        points.push({
+          timestamp,
+          timeLabel: new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          lat,
+          lon,
+          altitude: parseFloat(altitude.toFixed(1)),
+          agl: parseFloat((altitude - terrainAltitude).toFixed(1)),
+          speed: parseFloat(speed.toFixed(1)),
+          climbRate: parseFloat(climbRate.toFixed(1)),
+          terrainAltitude: parseFloat(terrainAltitude.toFixed(1)),
+        });
+    }
+    return points;
+  }, [flight]);
+
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newComment.trim() && currentUser && flight) {
@@ -260,63 +317,77 @@ const FlightDetail: React.FC = () => {
         </div>
       </header>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <div className="h-96 md:h-[500px] bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-            <MapDisplay track={flight.track} faiTriangleTurnpoints={flight.faiTriangle?.turnpoints} />
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center space-x-2">
-              <Sparkles className="text-cyan-400" />
-              <span>Resumo por IA</span>
-            </h2>
-            {isGeneratingSummary ? (
-              <div className="flex items-center space-x-2 text-gray-400">
-                <Loader className="animate-spin" size={20}/>
-                <span>Gerando análise do voo...</span>
-              </div>
-            ) : (
-              <p className="text-gray-300 whitespace-pre-wrap">{aiSummary}</p>
-            )}
+      {/* Mapa do Trajeto */}
+      <div className="h-96 md:h-[500px] bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+        <MapDisplay 
+          track={flight.track} 
+          faiTriangleTurnpoints={flight.faiTriangle?.turnpoints}
+          syncedPoint={syncedTrackPoint}
+        />
+      </div>
+      
+      {/* Gráfico do Voo */}
+      <div className="bg-gray-800 rounded-lg shadow-lg p-6">
+        <h2 className="text-xl font-bold text-white flex items-center space-x-2 mb-4">
+          <BarChart3 className="text-cyan-400" />
+          <span>Gráfico do Voo</span>
+        </h2>
+        <FlightChart 
+          trackData={detailedTrackData} 
+          onPointClick={setSyncedTrackPoint}
+        />
+      </div>
+
+      {/* Estatísticas e Pontuação */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-gray-800 rounded-lg shadow-lg p-6">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center space-x-2">
+            <List className="text-cyan-400"/>
+            <span>Estatísticas do Voo</span>
+          </h3>
+          <div className="space-y-2">
+            <StatItem icon={<TrendingUp size={20} />} label="Distância (OLC)" value={`${flight.distance.toFixed(1)} km`} />
+            <StatItem icon={<Hourglass size={20} />} label="Duração" value={formatDuration(flight.duration)} />
+            <StatItem icon={<Mountain size={20} />} label="Altitude Máxima" value={`${flight.maxAltitude} m`} />
+            <StatItem icon={<MountainSnow size={20} />} label="Ganho de Altitude" value={`${flight.altitudeGain} m`} />
+            <StatItem icon={<Gauge size={20} />} label="Velocidade Média" value={`${flight.avgSpeed.toFixed(1)} km/h`} />
+            <StatItem icon={<Wind size={20} />} label="Velocidade Máxima" value={`${flight.maxSpeed.toFixed(1)} km/h`} />
+            <StatItem icon={<ChevronsUp size={20} />} label="Subida Máxima" value={`${flight.maxClimbRate.toFixed(1)} m/s`} iconClassName="text-green-400"/>
+            <StatItem icon={<ChevronsDown size={20} />} label="Descida Máxima" value={`${flight.maxSinkRate.toFixed(1)} m/s`} iconClassName="text-red-400"/>
+            <StatItem icon={<Clock size={20} />} label="Horário Decolagem" value={new Date(flight.takeoffTime).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} />
+            <StatItem icon={<Flag size={20} />} label="Horário Pouso" value={new Date(flight.landingTime).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} />
           </div>
         </div>
         
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-gray-800 rounded-lg shadow-lg p-6">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center space-x-2">
-              <List className="text-cyan-400"/>
-              <span>Estatísticas do Voo</span>
-            </h3>
-            <div className="space-y-2">
-              <StatItem icon={<TrendingUp size={20} />} label="Distância (OLC)" value={`${flight.distance.toFixed(1)} km`} />
-              <StatItem icon={<Hourglass size={20} />} label="Duração" value={formatDuration(flight.duration)} />
-              <StatItem icon={<Mountain size={20} />} label="Altitude Máxima" value={`${flight.maxAltitude} m`} />
-              <StatItem icon={<MountainSnow size={20} />} label="Ganho de Altitude" value={`${flight.altitudeGain} m`} />
-              <StatItem icon={<Gauge size={20} />} label="Velocidade Média" value={`${flight.avgSpeed.toFixed(1)} km/h`} />
-              <StatItem icon={<Wind size={20} />} label="Velocidade Máxima" value={`${flight.maxSpeed.toFixed(1)} km/h`} />
-              <StatItem icon={<ChevronsUp size={20} />} label="Subida Máxima" value={`${flight.maxClimbRate.toFixed(1)} m/s`} iconClassName="text-green-400"/>
-              <StatItem icon={<ChevronsDown size={20} />} label="Descida Máxima" value={`${flight.maxSinkRate.toFixed(1)} m/s`} iconClassName="text-red-400"/>
-              <StatItem icon={<Clock size={20} />} label="Horário Decolagem" value={new Date(flight.takeoffTime).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} />
-              <StatItem icon={<Flag size={20} />} label="Horário Pouso" value={new Date(flight.landingTime).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} />
-            </div>
-          </div>
-          
-          <div className="bg-gray-800 rounded-lg shadow-lg p-6">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center space-x-2">
-              <Award className="text-cyan-400"/>
-              <span>Pontuação e Distâncias</span>
-            </h3>
-            <div className="space-y-2">
-              <StatItem icon={<Medal size={20} />} label="Pontuação OLC" value={`${flight.olcScore.toFixed(1)} pts`} />
-              <StatItem icon={<MoveRight size={20} />} label="Distância Reta" value={`${flight.straightDistance.toFixed(1)} km`} />
-              <StatItem icon={<GitBranch size={20} />} label="Distância Livre" value={`${flight.freeDistance.toFixed(1)} km`} />
-              {flight.faiTriangle && (
-                <StatItem icon={<Triangle size={20} />} label="Triângulo FAI" value={`${flight.faiTriangle.score.toFixed(1)} km`} />
-              )}
-            </div>
+        <div className="bg-gray-800 rounded-lg shadow-lg p-6">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center space-x-2">
+            <Award className="text-cyan-400"/>
+            <span>Pontuação e Distâncias</span>
+          </h3>
+          <div className="space-y-2">
+            <StatItem icon={<Medal size={20} />} label="Pontuação OLC" value={`${flight.olcScore.toFixed(1)} pts`} />
+            <StatItem icon={<MoveRight size={20} />} label="Distância Reta" value={`${flight.straightDistance.toFixed(1)} km`} />
+            <StatItem icon={<GitBranch size={20} />} label="Distância Livre" value={`${flight.freeDistance.toFixed(1)} km`} />
+            {flight.faiTriangle && (
+              <StatItem icon={<Triangle size={20} />} label="Triângulo FAI" value={`${flight.faiTriangle.score.toFixed(1)} km`} />
+            )}
           </div>
         </div>
+      </div>
+
+      <div className="bg-gray-800 rounded-lg shadow-lg p-6">
+        <h2 className="text-xl font-bold text-white mb-4 flex items-center space-x-2">
+          <Sparkles className="text-cyan-400" />
+          <span>Resumo por IA</span>
+        </h2>
+        {isGeneratingSummary ? (
+          <div className="flex items-center space-x-2 text-gray-400">
+            <Loader className="animate-spin" size={20}/>
+            <span>Gerando análise do voo...</span>
+          </div>
+        ) : (
+          <p className="text-gray-300 whitespace-pre-wrap">{aiSummary}</p>
+        )}
       </div>
 
       <div className="bg-gray-800 rounded-lg shadow-lg p-6">

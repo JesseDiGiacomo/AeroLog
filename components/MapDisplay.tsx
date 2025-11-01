@@ -1,18 +1,20 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
-import type { TrackPoint } from '../types';
+import type { TrackPoint, DetailedTrackPoint } from '../types';
 
 interface MapDisplayProps {
   track: TrackPoint[];
   interactive?: boolean;
   faiTriangleTurnpoints?: TrackPoint[];
+  syncedPoint?: DetailedTrackPoint | null;
 }
 
-const MapDisplay: React.FC<MapDisplayProps> = ({ track, interactive = true, faiTriangleTurnpoints }) => {
+const MapDisplay: React.FC<MapDisplayProps> = ({ track, interactive = true, faiTriangleTurnpoints, syncedPoint }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const trackLayerRef = useRef<L.FeatureGroup | null>(null);
   const faiLayerRef = useRef<L.FeatureGroup | null>(null);
+  const syncLayerRef = useRef<L.FeatureGroup | null>(null);
 
   useEffect(() => {
     if (mapContainerRef.current && !mapRef.current) {
@@ -29,24 +31,17 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ track, interactive = true, faiT
       }).addTo(map);
 
       mapRef.current = map;
+      // Initialize all layers once map is created
+      trackLayerRef.current = L.featureGroup().addTo(map);
+      faiLayerRef.current = L.featureGroup().addTo(map);
+      syncLayerRef.current = L.featureGroup().addTo(map);
     }
     
-    if (!mapRef.current) return;
+    if (!trackLayerRef.current || !faiLayerRef.current) return;
 
-    // Clear previous track layers
-    if (trackLayerRef.current) {
-      trackLayerRef.current.clearLayers();
-    } else {
-      trackLayerRef.current = L.featureGroup().addTo(mapRef.current);
-    }
+    // --- Track Layer ---
+    trackLayerRef.current.clearLayers();
     
-    // Clear previous FAI layers
-    if (faiLayerRef.current) {
-      faiLayerRef.current.clearLayers();
-    } else {
-      faiLayerRef.current = L.featureGroup().addTo(mapRef.current);
-    }
-
     if (track && track.length > 0) {
       const latlngs = track.map(p => L.latLng(p[0], p[1]));
       const polyline = L.polyline(latlngs, { color: '#06b6d4', weight: 3 });
@@ -65,9 +60,12 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ track, interactive = true, faiT
       }
 
       if (latlngs.length > 0) {
-        mapRef.current.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+        mapRef.current?.fitBounds(polyline.getBounds(), { padding: [20, 20] });
       }
     }
+
+    // --- FAI Layer ---
+    faiLayerRef.current.clearLayers();
 
     if (faiTriangleTurnpoints && faiTriangleTurnpoints.length === 3) {
       const faiLatLngs = faiTriangleTurnpoints.map(p => L.latLng(p[0], p[1]));
@@ -92,6 +90,27 @@ const MapDisplay: React.FC<MapDisplayProps> = ({ track, interactive = true, faiT
     }
 
   }, [track, interactive, faiTriangleTurnpoints]);
+
+  // --- Sync Marker Effect ---
+  useEffect(() => {
+    if (!syncLayerRef.current) return;
+
+    syncLayerRef.current.clearLayers();
+
+    if (syncedPoint) {
+      const pos = L.latLng(syncedPoint.lat, syncedPoint.lon);
+      const icon = L.divIcon({
+        className: 'sync-marker',
+        html: '',
+        iconSize: [22, 22], // width: 16px + border: 3px * 2 = 22px
+        iconAnchor: [11, 11], // Center the icon
+      });
+
+      const marker = L.marker(pos, { icon, zIndexOffset: 1000 });
+      syncLayerRef.current.addLayer(marker);
+      syncLayerRef.current.bringToFront();
+    }
+  }, [syncedPoint]);
 
   return <div ref={mapContainerRef} className="h-full w-full bg-gray-700" />;
 };

@@ -6,7 +6,6 @@ import FlightCard from '../components/FlightCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-// FIX: Imported Bookmark icon to be used in the UI.
 import { LogIn, Users, Rss, Bookmark } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
